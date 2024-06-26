@@ -8,37 +8,61 @@
 #include "btstack.h"
 #include "pico/cyw43_arch.h"
 #include "pico/btstack_cyw43.h"
-#include "hardware/adc.h"
 #include "pico/stdlib.h"
+#include "common.h"
 
-#include "server_common.h"
 
-#define HEARTBEAT_PERIOD_MS 1000
+static uint8_t adv_data[] = {
+    // Flags general discoverable
+    //0x02, BLUETOOTH_DATA_TYPE_FLAGS, //APP_AD_FLAGS,
+    0x02, 0x01, 0x06,
+    0x1B, 0xFF, 0x81, 0x11, 0xBE, 0xAC, '0', '0', ':', '0', '0', ':', '0', '0', ':', '0', '0', ':', '0', '0', ':', '0', '0',9,9,
+    RSSI_AT_1m, 0x93
+    // Name
+    //0x17, BLUETOOTH_DATA_TYPE_COMPLETE_LOCAL_NAME, 'P', 'i', 'c', 'o', ' ', '0', '0', ':', '0', '0', ':', '0', '0', ':', '0', '0', ':', '0', '0', ':', '0', '0',
+    //0x03, BLUETOOTH_DATA_TYPE_COMPLETE_LIST_OF_16_BIT_SERVICE_CLASS_UUIDS, 0x1a, 0x18,
+};
+static const uint8_t adv_data_len = sizeof(adv_data);
 
-static btstack_timer_source_t heartbeat;
 static btstack_packet_callback_registration_t hci_event_callback_registration;
 
-static void heartbeat_handler(struct btstack_timer_source *ts) {
-    static uint32_t counter = 0;
-    counter++;
 
-    // Update the temp every 10s
-    if (counter % 10 == 0) {
-        poll_temp();
-        if (le_notification_enabled) {
-            att_server_request_can_send_now_event(con_handle);
-        }
+
+
+void packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *packet, uint16_t size) {
+    UNUSED(size);
+    UNUSED(channel);
+    printf("packet handler called\n");
+    bd_addr_t local_addr;
+    if (packet_type != HCI_EVENT_PACKET) return;
+    uint8_t event_type = hci_event_packet_get_type(packet);
+    switch(event_type){
+        case BTSTACK_EVENT_STATE:
+            if (btstack_event_state_get_state(packet) != HCI_STATE_WORKING) return;
+            gap_local_bd_addr(local_addr);
+            printf("BTstack up and running on %s.\n", bd_addr_to_str(local_addr));
+            // setup advertisements
+            for (int i = 0; i < adv_data_len; ++i) {
+                printf("%X ", adv_data[i]);
+            }
+            printf("\n");
+            uint16_t adv_int_min = 800;
+            uint16_t adv_int_max = 800;
+            uint8_t adv_type = 2;
+            bd_addr_t null_addr;
+            memset(null_addr, 0, 6);
+            gap_advertisements_set_params(adv_int_min, adv_int_max, adv_type, 0, null_addr, 0x07, 0x00);
+            assert(adv_data_len <= 31); // ble limitation
+            gap_advertisements_set_data(adv_data_len, (uint8_t*) adv_data);
+            gap_advertisements_enable(1);
+            //gap_discoverable_control(0);
+            //gap_connectable_control(0);
+            break;
+        default:
+            break;
     }
-
-    // Invert the led
-    static int led_on = true;
-    led_on = !led_on;
-    cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, led_on);
-
-    // Restart timer
-    btstack_run_loop_set_timer(ts, HEARTBEAT_PERIOD_MS);
-    btstack_run_loop_add_timer(ts);
 }
+
 
 int main() {
     stdio_init_all();
@@ -49,45 +73,21 @@ int main() {
         return -1;
     }
 
-    // Initialise adc for the temp sensor
-    adc_init();
-    adc_select_input(ADC_CHANNEL_TEMPSENSOR);
-    adc_set_temp_sensor_enabled(true);
+    cyw43_arch_set_powermode(CYW43_AGGRESSIVE_PM);
 
     l2cap_init();
     sm_init();
-
-    att_server_init(profile_data, att_read_callback, att_write_callback);    
 
     // inform about BTstack state
     hci_event_callback_registration.callback = &packet_handler;
     hci_add_event_handler(&hci_event_callback_registration);
 
-    // register for ATT event
-    att_server_register_packet_handler(packet_handler);
-
-    // set one-shot btstack timer
-    heartbeat.process = &heartbeat_handler;
-    btstack_run_loop_set_timer(&heartbeat, HEARTBEAT_PERIOD_MS);
-    btstack_run_loop_add_timer(&heartbeat);
-
     // turn on bluetooth!
     hci_power_control(HCI_POWER_ON);
     
-    // btstack_run_loop_execute is only required when using the 'polling' method (e.g. using pico_cyw43_arch_poll library).
-    // This example uses the 'threadsafe background` method, where BT work is handled in a low priority IRQ, so it
-    // is fine to call bt_stack_run_loop_execute() but equally you can continue executing user code.
-
-#if 1 // btstack_run_loop_execute() is not required, so lets not use it
-    btstack_run_loop_execute();
-#else
-    // this core is free to do it's own stuff except when using 'polling' method (in which case you should use 
-    // btstacK_run_loop_ methods to add work to the run loop.
-    
-    // this is a forever loop in place of where user code would go.
     while(true) {      
         sleep_ms(1000);
     }
-#endif
+
     return 0;
 }
