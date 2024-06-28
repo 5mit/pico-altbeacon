@@ -59,45 +59,19 @@ static void client_start(void){
     gap_start_scan();
 }
 
-static bool advertisement_report_contains_service(uint16_t service, uint8_t *advertisement_report){
+static bool advertisement_report_is_beacon(uint8_t *advertisement_report){
     // get advertisement from report event
     const uint8_t * adv_data = gap_event_advertising_report_get_data(advertisement_report);
     uint8_t adv_len  = gap_event_advertising_report_get_data_length(advertisement_report);
-
- /*     for(int i = 0; i < adv_len; ++i) {
-            printf("%2X ", adv_data[i]);
-        }
-        printf("\n"); */
     if (beacon_id_len > adv_len) {
         return false;
     }
-
     for (int i = 0; i < beacon_id_len; ++i) {
         if (beacon_id[i] != adv_data[i]) {
             return false;
         }
     }   
     return true;
-
-    // iterate over advertisement data
-    ad_context_t context;
-    for (ad_iterator_init(&context, adv_len, adv_data) ; ad_iterator_has_more(&context) ; ad_iterator_next(&context)){
-        uint8_t data_type = ad_iterator_get_data_type(&context);
-        uint8_t data_size = ad_iterator_get_data_len(&context);
-        const uint8_t * data = ad_iterator_get_data(&context);
-       // printf("data type: %u\n", data_type);
-  
-        switch (data_type){
-            case BLUETOOTH_DATA_TYPE_COMPLETE_LIST_OF_16_BIT_SERVICE_CLASS_UUIDS:
-                for (int i = 0; i < data_size; i += 2) {
-                    uint16_t type = little_endian_read_16(data, i);
-                    if (type == service) return true;
-                }
-            default:
-                break;
-        }
-    }
-    return false;
 }
 
 static void handle_gatt_client_event(uint8_t packet_type, uint16_t channel, uint8_t *packet, uint16_t size) {
@@ -213,8 +187,7 @@ static void hci_event_handler(uint8_t packet_type, uint16_t channel, uint8_t *pa
             if (state != TC_W4_SCAN_RESULT) return;
             //printf("size: %u\tchan: %u\ttype: %u\tpacket:\n", size, channel, packet_type);
             // check name in advertisement
-            if (!advertisement_report_contains_service(ORG_BLUETOOTH_SERVICE_ENVIRONMENTAL_SENSING, packet)) return;
-            
+            if (!advertisement_report_is_beacon(packet)) return;
             printf("Beacon Found.\n");
             const uint8_t * beacon_data = gap_event_advertising_report_get_data(packet) + beacon_id_len;
             uint8_t beacon_data_len  = gap_event_advertising_report_get_data_length(packet) - beacon_id_len;
@@ -237,42 +210,11 @@ static void hci_event_handler(uint8_t packet_type, uint16_t channel, uint8_t *pa
             printf("Found device with addr %s.\n", bd_addr_to_str(server_addr));
 
             // Get rssi
-            printf("RSSI: %d dBm\n", (int8_t)packet[10]);
+            printf("RSSI: %d dBm\n", (int8_t)gap_event_advertising_report_get_rssi(packet));
 
             // Calc distance:
             double path_loss = 2;
-            printf("Distance: %lfm\n", pow(10, ((double)((int8_t)packet[30] - (int8_t)packet[10]) / (10 * path_loss))));
-
-           
-            //gap_connect(server_addr, server_addr_type);
-            break;
-        case HCI_EVENT_LE_META:
-            // wait for connection complete
-            switch (hci_event_le_meta_get_subevent_code(packet)) {
-                case HCI_SUBEVENT_LE_CONNECTION_COMPLETE:
-                    if (state != TC_W4_CONNECT) return;
-                    connection_handle = hci_subevent_le_connection_complete_get_connection_handle(packet);
-                    // initialize ga/home/smith/docs/pico/tt client context with handle, and add it to the list of active clients
-                    // query primary services
-                    DEBUG_LOG("Search for env sensing service.\n");
-                    state = TC_W4_SERVICE_RESULT;
-                    gatt_client_discover_primary_services_by_uuid16(handle_gatt_client_event, connection_handle, ORG_BLUETOOTH_SERVICE_ENVIRONMENTAL_SENSING);
-                    break;
-                default:
-                    break;
-            }
-            break;
-        case HCI_EVENT_DISCONNECTION_COMPLETE:
-            // unregister listener
-            connection_handle = HCI_CON_HANDLE_INVALID;
-            if (listener_registered){
-                listener_registered = false;
-                gatt_client_stop_listening_for_characteristic_value_updates(&notification_listener);
-            }
-            printf("Disconnected %s\n", bd_addr_to_str(server_addr));
-            if (state == TC_OFF) break;
-            client_start();
-            break;
+            printf("Distance: %lfm\n", pow(10, ((double)((int8_t)beacon_data[19] - (int8_t)gap_event_advertising_report_get_rssi(packet)) / (10 * path_loss))));
         default:
             break;
     }
@@ -327,20 +269,10 @@ int main() {
     // turn on!
     hci_power_control(HCI_POWER_ON);
 
-    // btstack_run_loop_execute is only required when using the 'polling' method (e.g. using pico_cyw43_arch_poll library).
-    // This example uses the 'threadsafe background` method, where BT work is handled in a low priority IRQ, so it
-    // is fine to call bt_stack_run_loop_execute() but equally you can continue executing user code.
-
-#if 1 // this is only necessary when using polling (which we aren't, but we're showing it is still safe to call in this case)
     btstack_run_loop_execute();
-#else
-    // this core is free to do it's own stuff except when using 'polling' method (in which case you should use 
-    // btstacK_run_loop_ methods to add work to the run loop.
 
-    // this is a forever loop in place of where user code would go.
     while(true) {      
         sleep_ms(1000);
     }
-#endif
     return 0;
 }
