@@ -23,8 +23,7 @@ if (CMAKE_C_COMPILER_ID STREQUAL "GNU")
     add_compile_options(-Wno-maybe-uninitialized)
 endif()
 
-# Standalone example that reads from the on board temperature sensor and sends notifications via BLE
-# Flashes slowly each second to show it's running
+
 add_executable(picow_ble_beacon
     beacon.c
     common.c
@@ -41,9 +40,6 @@ target_include_directories(picow_ble_beacon PRIVATE
 
 pico_add_extra_outputs(picow_ble_beacon)
 
-# Standalone example that connects to picow_ble_beacon and reads the temperature 
-# Flahes once quickly each second when it's running but not connected to another device
-# Flashes twice quickly each second when connected to another device and reading it's temperature
 add_executable(picow_ble_beacon_receiver
     receiver.c
     common.c

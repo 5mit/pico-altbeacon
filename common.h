@@ -1,5 +1,6 @@
 #ifndef COMMON_H_
 #define COMMON_H_
+
 #include "pico/cyw43_arch.h"
 
 #define RSSI_AT_1m (-50)

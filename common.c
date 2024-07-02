@@ -1,5 +1,4 @@
 #include "common.h"
-#include "pico/cyw43_arch.h"
 
 uint8_t adv_data[] = {
     BEACON_ID,
