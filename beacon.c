@@ -11,14 +11,10 @@
 #include "pico/stdlib.h"
 #include "common.h"
 
+#define ADV_INT_MIN 800
+#define ADV_INT_MAX 800
+#define ADV_TYPE 2
 
-static uint8_t adv_data[] = {
-    // Flags general discoverable
-    0x02, 0x01, 0x06, 0x1B, 0xFF, BEACON_MFG_ID, 0xBE, 0xAC, 
-    '0', '0', ':', '0', '0', ':', '0', '0', ':', '0', '0', ':', '0', '0', ':', '0', '0',0x00,0x00,
-    RSSI_AT_1m, 0x00
-};
-static const uint8_t adv_data_len = sizeof(adv_data);
 
 int main() {
     stdio_init_all();
@@ -37,17 +33,12 @@ int main() {
         printf("%X ", adv_data[i]);
     }
     printf("\n");
-    uint16_t adv_int_min = 800;
-    uint16_t adv_int_max = 800;
-    uint8_t adv_type = 2;
     bd_addr_t null_addr;
     memset(null_addr, 0, 6);
-    gap_advertisements_set_params(adv_int_min, adv_int_max, adv_type, 0, null_addr, 0x07, 0x00);
+    gap_advertisements_set_params(ADV_INT_MIN, ADV_INT_MAX, ADV_TYPE, 0, null_addr, 0x07, 0x00);
     assert(adv_data_len <= 31); // ble limitation
-    gap_advertisements_set_data(adv_data_len, (uint8_t*) adv_data);
+    gap_advertisements_set_data(adv_data_len, (uint8_t*)adv_data);
     gap_advertisements_enable(1);
-    //gap_discoverable_control(0);
-    //gap_connectable_control(0);
 
     // turn on bluetooth!
     hci_power_control(HCI_POWER_ON);

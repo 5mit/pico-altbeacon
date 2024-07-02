@@ -26,7 +26,8 @@ endif()
 # Standalone example that reads from the on board temperature sensor and sends notifications via BLE
 # Flashes slowly each second to show it's running
 add_executable(picow_ble_beacon
-    server.c
+    beacon.c
+    common.c
     )
 target_link_libraries(picow_ble_beacon
     pico_stdlib
@@ -44,7 +45,8 @@ pico_add_extra_outputs(picow_ble_beacon)
 # Flahes once quickly each second when it's running but not connected to another device
 # Flashes twice quickly each second when connected to another device and reading it's temperature
 add_executable(picow_ble_beacon_receiver
-    client.c
+    receiver.c
+    common.c
     )
 target_link_libraries(picow_ble_beacon_receiver
     pico_stdlib
