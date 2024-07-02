@@ -1,6 +1,6 @@
 # Pico W - AltBeacon
 
-An implementation of a BLE beacon using the AltBeacon pseudo standard.
+An implementation of a BLE beacon for the Raspberry Pi Pico W using the AltBeacon pseudo standard.
 
 This project contains two programs: picow_ble_beacon (beacon.c) and picow_ble_receiver (receiver.c)
 
